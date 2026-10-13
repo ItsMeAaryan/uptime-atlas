@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import type { ValidatedMonitorData } from "../validation/monitor";
 import { performHttpCheck, type HttpCheckOutcome } from "./checker";
+import { CONFIG } from "../config";
 
 export async function createMonitor(data: ValidatedMonitorData) {
   // Ensure slug uniqueness
@@ -34,11 +35,16 @@ export async function listMonitors() {
         orderBy: { checkedAt: "desc" },
         take: 1, // Get most recent check result
       },
+      incidents: {
+        where: { status: "OPEN" },
+        take: 1,
+      },
     },
   });
 
   return monitors.map((monitor) => {
     const latestCheck = monitor.checkResults[0] || null;
+    const activeIncident = monitor.incidents[0] || null;
     return {
       id: monitor.id,
       name: monitor.name,
@@ -54,6 +60,14 @@ export async function listMonitors() {
       consecutiveFailures: monitor.consecutiveFailures,
       lastCheckedAt: monitor.lastCheckedAt,
       createdAt: monitor.createdAt,
+      openIncident: activeIncident
+        ? {
+            id: activeIncident.id,
+            title: activeIncident.title,
+            cause: activeIncident.cause,
+            startedAt: activeIncident.startedAt,
+          }
+        : null,
       latestCheck: latestCheck
         ? {
             id: latestCheck.id,
@@ -78,14 +92,30 @@ export async function getMonitorById(id: string) {
       },
       incidents: {
         orderBy: { startedAt: "desc" },
-        take: 10,
+        take: 20,
+        include: {
+          events: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
       },
     },
   });
 }
 
 export async function recordCheckResult(monitorId: string, outcome: HttpCheckOutcome) {
+  const threshold = CONFIG.INCIDENT_FAILURE_THRESHOLD;
+
   return prisma.$transaction(async (tx) => {
+    // Acquire row-level lock on monitor in live PostgreSQL if supported to serialize concurrent checks
+    if (typeof (tx as any).$executeRaw === "function") {
+      try {
+        await (tx as any).$executeRaw`SELECT 1 FROM monitors WHERE id = ${monitorId} FOR UPDATE`;
+      } catch {
+        // Fall back gracefully if mock or unsupported
+      }
+    }
+
     // 1. Insert new CheckResult row
     const checkResult = await tx.checkResult.create({
       data: {
@@ -98,16 +128,98 @@ export async function recordCheckResult(monitorId: string, outcome: HttpCheckOut
       },
     });
 
-    // 2. Fetch current consecutive failure count
+    // 2. Fetch current consecutive failure count and monitor name
     const monitor = await tx.monitor.findUniqueOrThrow({
       where: { id: monitorId },
-      select: { consecutiveFailures: true },
+      select: { id: true, name: true, consecutiveFailures: true },
     });
 
     const isDown = outcome.status === "DOWN";
-    const consecutiveFailures = isDown ? monitor.consecutiveFailures + 1 : 0;
+    const isUp = outcome.status === "UP";
+    const consecutiveFailures = isDown ? monitor.consecutiveFailures + 1 : (isUp ? 0 : monitor.consecutiveFailures);
 
-    // 3. Update monitor status and timestamp
+    let incidentAction: "CREATED" | "RESOLVED" | "NONE" = "NONE";
+    let activeIncident: any = null;
+
+    // 3. Incident Lifecycle:
+    // Outage threshold reached -> open an incident if none currently OPEN
+    if (isDown && consecutiveFailures >= threshold) {
+      const existingOpen = await tx.incident.findFirst({
+        where: { monitorId, status: "OPEN" },
+      });
+
+      if (!existingOpen) {
+        try {
+          const newIncident = await tx.incident.create({
+            data: {
+              monitorId,
+              status: "OPEN",
+              title: `Service Outage: ${monitor.name}`,
+              cause: outcome.errorMessage || `Health check failed with HTTP ${outcome.statusCode ?? "error"}`,
+              startedAt: outcome.checkedAt,
+            },
+          });
+
+          await tx.incidentEvent.create({
+            data: {
+              incidentId: newIncident.id,
+              type: "DETECTED",
+              message: `Automated probe detected outage (${consecutiveFailures} consecutive failures). Root cause: ${outcome.errorMessage || `HTTP ${outcome.statusCode ?? "error"}`}`,
+              createdAt: outcome.checkedAt,
+            },
+          });
+
+          activeIncident = newIncident;
+          incidentAction = "CREATED";
+        } catch (err: any) {
+          // If unique constraint idx_unique_open_incident triggers under race, retrieve existing
+          if (err?.code === "P2002") {
+            activeIncident = await tx.incident.findFirst({
+              where: { monitorId, status: "OPEN" },
+            });
+            incidentAction = "NONE";
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        activeIncident = existingOpen;
+      }
+    } else if (isUp) {
+      // Health check recovered -> auto-resolve any currently OPEN incident
+      const existingOpen = await tx.incident.findFirst({
+        where: { monitorId, status: "OPEN" },
+      });
+
+      if (existingOpen) {
+        const startedTime = new Date(existingOpen.startedAt).getTime();
+        const resolvedTime = outcome.checkedAt.getTime();
+        const durationSeconds = Math.max(0, Math.floor((resolvedTime - startedTime) / 1000));
+
+        const resolved = await tx.incident.update({
+          where: { id: existingOpen.id },
+          data: {
+            status: "RESOLVED",
+            resolvedAt: outcome.checkedAt,
+            durationSeconds,
+          },
+        });
+
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: existingOpen.id,
+            type: "RESOLVED",
+            message: `Service recovered. Endpoint responded with HTTP status ${outcome.statusCode ?? "OK"} (${outcome.responseTimeMs ?? 0}ms).`,
+            createdAt: outcome.checkedAt,
+          },
+        });
+
+        activeIncident = resolved;
+        incidentAction = "RESOLVED";
+      }
+    }
+
+    // 4. Update monitor status, timestamp, and consecutive failure counter
     const updatedMonitor = await tx.monitor.update({
       where: { id: monitorId },
       data: {
@@ -117,7 +229,12 @@ export async function recordCheckResult(monitorId: string, outcome: HttpCheckOut
       },
     });
 
-    return { checkResult, monitor: updatedMonitor };
+    return {
+      checkResult,
+      monitor: updatedMonitor,
+      incident: activeIncident,
+      incidentAction,
+    };
   });
 }
 

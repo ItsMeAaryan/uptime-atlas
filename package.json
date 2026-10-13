@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "node scripts/db.js generate",
-    "db:push": "node scripts/db.js db push",
+    "db:push": "node scripts/db.js db push && node scripts/ensure-constraints.js",
     "db:studio": "node scripts/db.js studio",
     "worker": "tsx src/worker/index.ts"
   },

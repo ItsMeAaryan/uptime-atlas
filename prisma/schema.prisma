@@ -74,8 +74,23 @@ model Incident {
   resolvedAt      DateTime?
   durationSeconds Int?
 
-  monitor         Monitor        @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitor         Monitor         @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  events          IncidentEvent[]
 
+  @@index([monitorId, status])
   @@map("incidents")
+}
+
+model IncidentEvent {
+  id         String   @id @default(uuid())
+  incidentId String
+  type       String
+  message    String
+  createdAt  DateTime @default(now())
+
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@map("incident_events")
 }
 
