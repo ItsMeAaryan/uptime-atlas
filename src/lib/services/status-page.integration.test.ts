@@ -142,4 +142,34 @@ describe("Public Status Page End-to-End Integration", () => {
       expect(match!.currentStatus).toBe(initial.currentStatus);
     }
   });
+
+  it("7. Attempting to toggle publication or regenerate token on non-existent monitor throws error", async () => {
+    const nonexistentId = "00000000-0000-0000-0000-000000000000";
+
+    await expect(toggleMonitorPublication(nonexistentId, true)).rejects.toThrow(
+      `Monitor with ID "${nonexistentId}" not found.`
+    );
+
+    await expect(regeneratePublicId(nonexistentId)).rejects.toThrow(
+      `Monitor with ID "${nonexistentId}" not found.`
+    );
+  });
+
+  it("8. Invalid or unpublished tokens return null (404)", async () => {
+    // Arbitrary unknown token
+    expect(await getStatusPageData("pub_unknown_invalid_token")).toBeNull();
+
+    // Malformed empty or non-string tokens
+    expect(await getStatusPageData("")).toBeNull();
+    expect(await getStatusPageData("   ")).toBeNull();
+
+    // Monitor that was unpublished in test 5 has a valid publicId format, but returns null because isPublic is false
+    const monitor = await prisma.monitor.findUniqueOrThrow({
+      where: { id: testMonitorId },
+    });
+    expect(monitor.isPublic).toBe(false);
+    expect(monitor.publicId).not.toBeNull();
+    expect(await getStatusPageData(monitor.publicId!)).toBeNull();
+  });
 });
+

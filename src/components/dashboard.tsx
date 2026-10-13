@@ -194,6 +194,35 @@ export default function Dashboard() {
     alert(`Copied public status page URL to clipboard:\n${url}`);
   }
 
+  async function handleRegenerateToken(id: string) {
+    if (
+      !confirm(
+        "Are you sure you want to rotate the public status link? The previous link will stop working immediately."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/monitors/${id}/publication`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerate: true }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await refreshAll();
+        if (json.data?.publicId) {
+          const url = `${window.location.origin}/status/${json.data.publicId}`;
+          alert(`Public status link rotated successfully.\nNew URL: ${url}`);
+        }
+      } else {
+        alert(json.error || "Failed to rotate public link.");
+      }
+    } catch {
+      alert("Network error rotating public link.");
+    }
+  }
+
   async function handleManualCheck(id: string) {
     setCheckingMonitorId(id);
     try {
@@ -557,6 +586,13 @@ export default function Dashboard() {
                                     title="Copy public status page link"
                                   >
                                     Copy Link
+                                  </button>
+                                  <button
+                                    onClick={() => handleRegenerateToken(m.id)}
+                                    className="rounded bg-slate-800 px-2 py-1 font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-[11px]"
+                                    title="Rotate public link (invalidates old URL)"
+                                  >
+                                    Rotate Link
                                   </button>
                                   <button
                                     onClick={() => handleTogglePublication(m.id, true)}

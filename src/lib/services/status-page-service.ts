@@ -96,6 +96,14 @@ export async function toggleMonitorPublication(
  * Regenerates the publicId for a monitor, invalidating any previously shared URL.
  */
 export async function regeneratePublicId(monitorId: string) {
+  const monitor = await prisma.monitor.findUnique({
+    where: { id: monitorId },
+  });
+
+  if (!monitor) {
+    throw new Error(`Monitor with ID "${monitorId}" not found.`);
+  }
+
   const newPublicId = generatePublicId();
 
   return prisma.monitor.update({
@@ -216,3 +224,4 @@ export async function getStatusPageData(
     resolvedIncidents,
   };
 }
+

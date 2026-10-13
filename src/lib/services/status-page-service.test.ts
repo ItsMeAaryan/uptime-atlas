@@ -93,6 +93,13 @@ describe("Status Page Service", () => {
 
   describe("regeneratePublicId", () => {
     it("replaces publicId with a new distinct token", async () => {
+      (prisma.monitor.findUnique as any).mockResolvedValueOnce({
+        id: "mon-123",
+        name: "Test API",
+        isPublic: true,
+        publicId: "pub_old_token",
+      });
+
       (prisma.monitor.update as any).mockImplementationOnce(({ data }: any) => ({
         id: "mon-123",
         name: "Test API",
@@ -103,6 +110,15 @@ describe("Status Page Service", () => {
       const result = await regeneratePublicId("mon-123");
 
       expect(result.publicId).toMatch(/^pub_[a-f0-9]{32}$/);
+      expect(result.publicId).not.toBe("pub_old_token");
+    });
+
+    it("throws an error when monitor is not found", async () => {
+      (prisma.monitor.findUnique as any).mockResolvedValueOnce(null);
+
+      await expect(regeneratePublicId("mon-nonexistent")).rejects.toThrow(
+        'Monitor with ID "mon-nonexistent" not found.'
+      );
     });
   });
 

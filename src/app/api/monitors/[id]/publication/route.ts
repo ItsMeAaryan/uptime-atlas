@@ -38,9 +38,22 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal Server Error";
+    const isNotFound =
+      (error instanceof Error && error.message.includes("not found")) ||
+      (typeof error === "object" && error !== null && "code" in error && error.code === "P2025");
+
+    if (isNotFound) {
+      return NextResponse.json(
+        { success: false, error: "Monitor not found", details: message },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: "Failed to update publication settings", details: message },
       { status: 500 }
     );
   }
 }
+
+
