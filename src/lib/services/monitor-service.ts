@@ -56,6 +56,7 @@ export async function listMonitors() {
       expectedStatusCode: monitor.expectedStatusCode,
       isActive: monitor.isActive,
       isPublic: monitor.isPublic,
+      publicId: monitor.publicId,
       currentStatus: monitor.currentStatus,
       consecutiveFailures: monitor.consecutiveFailures,
       lastCheckedAt: monitor.lastCheckedAt,

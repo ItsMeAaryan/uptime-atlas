@@ -35,7 +35,8 @@ model Monitor {
   timeoutMs           Int            @default(5000)
   expectedStatusCode  Int            @default(200)
   isActive            Boolean        @default(true)
-  isPublic            Boolean        @default(true)
+  isPublic            Boolean        @default(false)
+  publicId            String?        @unique
   currentStatus       MonitorStatus  @default(PENDING)
   consecutiveFailures Int            @default(0)
   lastCheckedAt       DateTime?

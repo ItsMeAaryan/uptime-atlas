@@ -97,6 +97,39 @@ WORKER_LOCK_DURATION_MS=30000     # Lease duration before an uncompleted lock ex
 
 ---
 
+## Public Status Pages & Privacy Boundary
+
+Uptime Atlas provides clean, public-facing status pages for external stakeholders with a strict privacy boundary:
+
+* **Stable Non-Guessable Identifier (`publicId`):** Each published monitor is accessed via a dedicated route `/status/:publicId` using a cryptographically secure 128-bit hex token (e.g., `pub_7f8a1...`).
+* **Strict Privacy Boundary:** Target URLs (`url`), database primary keys (`id`, `monitorId`), internal worker errors, and server network details are **never** exposed publicly. Public status responses contain only user-facing telemetry: service name, operational status, last checked timestamp, 24h/7d/30d reliability metrics, active incidents, and resolved incident history.
+* **Explicit Opt-in Publication:** Monitors default to private (`isPublic: false`). A status page is only visible when an operator explicitly publishes it via the dashboard toggle or API.
+* **404 Handling:** Requests to disabled, private, or non-existent status tokens return a clean 404 response without leaking monitor existence or configuration details.
+* **Token Rotation:** Operators can rotate/regenerate the `publicId` token at any time via `PATCH /api/monitors/:id/publication`, instantly invalidating the previous public URL.
+* **Live Refresh:** Public status pages automatically poll for updates every 30 seconds with an interactive manual refresh control and time-window selector (24h, 7d, 30d).
+
+---
+
+## API Endpoints
+
+### Operator Endpoints (Private)
+* `GET /api/monitors`: List all monitors with health summaries and incident counts.
+* `POST /api/monitors`: Register a new monitor (`isPublic` defaults to `false`).
+* `GET /api/monitors/:id`: Retrieve full monitor details including target URL and configuration.
+* `POST /api/monitors/:id/check`: Trigger an immediate on-demand HTTP check.
+* `GET /api/monitors/:id/analytics?window=24h`: Retrieve sample-based reliability metrics for 24h, 7d, or 30d windows.
+* `GET /api/monitors/:id/incidents`: List open and resolved incidents for a monitor.
+* `PATCH /api/monitors/:id/publication`: Toggle publication (`{ "isPublic": true|false }`) or rotate token (`{ "regenerate": true }`).
+* `GET /api/incidents/:id`: Retrieve incident details and full chronological timeline events.
+* `POST /api/incidents/:id/events`: Add operator timeline note (`INVESTIGATING`, `IDENTIFIED`, `MONITORING`, `NOTE`).
+* `POST /api/incidents/:id/resolve`: Manually resolve an open incident with a closing note.
+
+### Public Endpoints
+* `GET /api/status/:publicId`: Public read-only endpoint returning sanitized monitor telemetry, rolling metrics, and incident timelines.
+* `GET /status/:publicId`: Public status page UI.
+
+---
+
 ## Testing
 
 Run unit and integration test suites:
@@ -107,9 +140,10 @@ npm run test
 
 Tests cover:
 * **SSRF Protection:** Loopback, private IP ranges (RFC 1918), cloud metadata (169.254.169.254), and DNS rebinding checks.
-* **Input Validation:** Name lengths, bounded timeouts, status codes, and slug generators.
+* **Input Validation:** Name lengths, bounded timeouts, status codes, publication flags, and slug generators.
 * **HTTP Prober:** Mocked network calls, timeouts, stream cancellation, and latency tracking.
 * **Worker Scheduler & Runner:** Due-monitor selection, atomic claim locking, failure isolation, and graceful shutdown.
 * **Incident Lifecycle:** Threshold triggering (3rd consecutive failure), non-duplication of open incidents, recovery resolution, duration calculation, and concurrent race safety (`P2002`).
 * **Reliability Analytics:** Empty windows (`null` / No data), all-success windows (100%), all-failure windows (0%), mixed windows, and P95 latency percentile math.
 * **Timeline Events:** Chronological event tracking, operator notes validation, and manual incident resolution.
+* **Public Status Pages & Privacy:** Secure token generation, publication state toggles, token rotation, 404 responses for unpublished or missing monitors, and end-to-end assertions verifying target URLs and internal IDs are never leaked.

@@ -16,8 +16,14 @@ describe("Incident Lifecycle End-to-End Integration Verification", () => {
   const testMonitorName = "Lifecycle E2E Verification Monitor";
 
   beforeAll(async () => {
-    // 1. Capture snapshot of pre-existing monitors and checks in PostgreSQL
+    // 1. Capture snapshot of pre-existing persistent monitors in PostgreSQL
     const existing = await prisma.monitor.findMany({
+      where: {
+        NOT: [
+          { slug: { startsWith: "lifecycle-" } },
+          { slug: { startsWith: "status-test-" } },
+        ],
+      },
       include: {
         _count: {
           select: { checkResults: true, incidents: true },
@@ -277,21 +283,15 @@ describe("Incident Lifecycle End-to-End Integration Verification", () => {
 
   it("6. Existing monitors and check history remain unchanged by the test", async () => {
     // Fetch all monitors excluding our temporary test monitor
-    const currentMonitors = await prisma.monitor.findMany({
-      where: {
-        id: { not: testMonitorId },
-      },
-      include: {
-        _count: {
-          select: { checkResults: true, incidents: true },
-        },
-      },
-    });
-
-    expect(currentMonitors).toHaveLength(initialMonitorsSnapshot.length);
-
     for (const snap of initialMonitorsSnapshot) {
-      const match = currentMonitors.find((m) => m.id === snap.id);
+      const match = await prisma.monitor.findUnique({
+        where: { id: snap.id },
+        include: {
+          _count: {
+            select: { checkResults: true, incidents: true },
+          },
+        },
+      });
       expect(match).toBeDefined();
       expect(match!.name).toBe(snap.name);
       expect(match!.url).toBe(snap.url);

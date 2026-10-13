@@ -82,5 +82,21 @@ describe("Monitor Validation", () => {
     expect(invalidStatus.isValid).toBe(false);
     expect(invalidStatus.errors.expectedStatusCode).toContain("between 100 and 599");
   });
+
+  it("defaults isPublic to false when omitted (opt-in publication)", async () => {
+    const omitted = await validateMonitorInput(
+      { name: "Private Web", url: "https://example.com" },
+      { checkDns: false }
+    );
+    expect(omitted.isValid).toBe(true);
+    expect(omitted.data?.isPublic).toBe(false);
+
+    const explicitlyPublic = await validateMonitorInput(
+      { name: "Public Web", url: "https://example.com", isPublic: true },
+      { checkDns: false }
+    );
+    expect(explicitlyPublic.isValid).toBe(true);
+    expect(explicitlyPublic.data?.isPublic).toBe(true);
+  });
 });
 

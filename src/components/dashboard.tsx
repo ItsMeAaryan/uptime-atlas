@@ -33,6 +33,8 @@ interface Monitor {
   consecutiveFailures: number;
   lastCheckedAt: string | null;
   createdAt: string;
+  isPublic: boolean;
+  publicId: string | null;
   openIncident: OpenIncidentSummary | null;
   latestCheck: LatestCheck | null;
 }
@@ -77,6 +79,7 @@ export default function Dashboard() {
   const [formMethod, setFormMethod] = useState<"GET" | "HEAD" | "POST">("GET");
   const [formTimeout, setFormTimeout] = useState("5000");
   const [formExpectedStatus, setFormExpectedStatus] = useState("200");
+  const [formIsPublic, setFormIsPublic] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -137,6 +140,7 @@ export default function Dashboard() {
           method: formMethod,
           timeoutMs: Number.parseInt(formTimeout, 10),
           expectedStatusCode: Number.parseInt(formExpectedStatus, 10),
+          isPublic: formIsPublic,
         }),
       });
 
@@ -156,6 +160,7 @@ export default function Dashboard() {
       setFormMethod("GET");
       setFormTimeout("5000");
       setFormExpectedStatus("200");
+      setFormIsPublic(false);
       setShowAddModal(false);
       await refreshAll();
     } catch {
@@ -163,6 +168,30 @@ export default function Dashboard() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleTogglePublication(id: string, currentIsPublic: boolean) {
+    try {
+      const res = await fetch(`/api/monitors/${id}/publication`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPublic: !currentIsPublic }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await refreshAll();
+      } else {
+        alert(json.error || "Failed to update publication settings.");
+      }
+    } catch {
+      alert("Network error updating publication settings.");
+    }
+  }
+
+  function handleCopyStatusLink(publicId: string) {
+    const url = `${window.location.origin}/status/${publicId}`;
+    navigator.clipboard.writeText(url);
+    alert(`Copied public status page URL to clipboard:\n${url}`);
   }
 
   async function handleManualCheck(id: string) {
@@ -511,6 +540,42 @@ export default function Dashboard() {
                             </td>
 
                             <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
+                              {m.isPublic && m.publicId ? (
+                                <>
+                                  <a
+                                    href={`/status/${m.publicId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded bg-emerald-950/80 border border-emerald-800 px-2 py-1 font-medium text-emerald-300 hover:bg-emerald-900 transition-colors inline-block text-[11px]"
+                                    title="Open public status page"
+                                  >
+                                    Public ↗
+                                  </a>
+                                  <button
+                                    onClick={() => handleCopyStatusLink(m.publicId!)}
+                                    className="rounded bg-slate-800 px-2 py-1 font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-[11px]"
+                                    title="Copy public status page link"
+                                  >
+                                    Copy Link
+                                  </button>
+                                  <button
+                                    onClick={() => handleTogglePublication(m.id, true)}
+                                    className="rounded px-1.5 py-1 text-slate-400 hover:text-rose-400 transition-colors text-[11px]"
+                                    title="Disable public status page (make private)"
+                                  >
+                                    Unpublish
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => handleTogglePublication(m.id, false)}
+                                  className="rounded bg-slate-800/80 border border-slate-700 px-2 py-1 font-medium text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-[11px]"
+                                  title="Publish public status page"
+                                >
+                                  Publish
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => setAnalyticsTarget({ id: m.id, name: m.name })}
                                 className="rounded bg-slate-800 px-2.5 py-1 font-medium text-indigo-300 hover:bg-slate-700 hover:text-white transition-colors"
@@ -756,6 +821,19 @@ export default function Dashboard() {
                     <p className="mt-1 text-[11px] text-rose-400">{formErrors.timeoutMs}</p>
                   )}
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="formIsPublic"
+                  checked={formIsPublic}
+                  onChange={(e) => setFormIsPublic(e.target.checked)}
+                  className="rounded border-slate-800 bg-slate-950 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                />
+                <label htmlFor="formIsPublic" className="text-xs text-slate-300 select-none cursor-pointer">
+                  Publish public status page (opt-in; private by default)
+                </label>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">

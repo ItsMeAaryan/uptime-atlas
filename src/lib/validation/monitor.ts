@@ -119,8 +119,8 @@ export async function validateMonitorInput(
     }
   }
 
-  // 7. Is public flag
-  const isPublic = payload.isPublic === undefined ? true : Boolean(payload.isPublic);
+  // 7. Is public flag (opt-in; default false)
+  const isPublic = payload.isPublic === undefined ? false : Boolean(payload.isPublic);
 
   if (Object.keys(errors).length > 0) {
     return { isValid: false, errors };
