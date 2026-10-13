@@ -28,3 +28,4 @@ const res = spawnSync('npx', ['prisma', ...args], {
 });
 
 process.exit(res.status ?? 0);
+
