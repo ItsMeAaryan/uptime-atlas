@@ -95,3 +95,28 @@ model IncidentEvent {
   @@map("incident_events")
 }
 
+model Operator {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions     Session[]
+
+  @@map("operators")
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  operatorId String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  operator   Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
