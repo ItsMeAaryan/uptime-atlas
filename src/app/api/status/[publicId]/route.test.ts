@@ -9,9 +9,8 @@ describe("GET /api/status/[publicId] route handler", () => {
     vi.clearAllMocks();
   });
 
-  it("returns 200 with sanitized data for published monitor", async () => {
-    const mockData = {
-      publicId: "pub_12345678901234567890123456789012",
+  it("returns 200 with sanitized data for published monitor (omitting publicId from body)", async () => {
+    const mockData: any = {
       name: "Public Service",
       currentStatus: "UP" as const,
       lastCheckedAt: new Date().toISOString(),
@@ -22,6 +21,15 @@ describe("GET /api/status/[publicId] route handler", () => {
           last30Days: { uptimePercentage: 100, avgResponseTimeMs: 120, p95ResponseTimeMs: 150, totalChecks: 200 },
         },
         limitationNotice: "Notice",
+      },
+      calendar: {
+        timezone: "UTC",
+        rangeDays: 90,
+        periodStart: "2026-07-13",
+        periodEnd: "2026-10-10",
+        overallUptimePercentage: 100,
+        totalChecks: 200,
+        days: [],
       },
       activeIncidents: [],
       resolvedIncidents: [],
@@ -38,7 +46,7 @@ describe("GET /api/status/[publicId] route handler", () => {
     const json = await response.json();
     expect(json.success).toBe(true);
     expect(json.data.name).toBe("Public Service");
-    expect(json.data.publicId).toBe("pub_12345678901234567890123456789012");
+    expect(json.data.publicId).toBeUndefined(); // strictly omitted from body
   });
 
   it("returns 404 when status page does not exist or is unpublished", async () => {
@@ -53,5 +61,24 @@ describe("GET /api/status/[publicId] route handler", () => {
     const json = await response.json();
     expect(json.success).toBe(false);
     expect(json.error).toBe("Status page not found or not published.");
+  });
+
+  it("returns generic 500 without leaking server stack trace or internal error details", async () => {
+    vi.spyOn(statusService, "getStatusPageData").mockRejectedValueOnce(
+      new Error("FATAL: connection to database failed on postgresql://internal-host:5432")
+    );
+
+    const request = new Request("http://localhost:3000/api/status/pub_valid_token");
+    const response = await GET(request, {
+      params: Promise.resolve({ publicId: "pub_valid_token" }),
+    });
+
+    expect(response.status).toBe(500);
+    const json = await response.json();
+    expect(json.success).toBe(false);
+    expect(json.error).toBe("Failed to load public status page");
+    expect(json.details).toBeUndefined();
+    expect(JSON.stringify(json)).not.toContain("internal-host");
+    expect(JSON.stringify(json)).not.toContain("FATAL");
   });
 });

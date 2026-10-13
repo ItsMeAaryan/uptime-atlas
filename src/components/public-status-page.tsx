@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PublicStatusPageData } from "@/lib/services/status-page-service";
+import type {
+  PublicStatusPageData,
+  PublicDailyUptime,
+} from "@/lib/services/status-page-service";
 
 interface Props {
   initialData: PublicStatusPageData;
@@ -13,6 +16,9 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeWindow, setActiveWindow] = useState<"24h" | "7d" | "30d">("24h");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [selectedDay, setSelectedDay] = useState<PublicDailyUptime | null>(
+    initialData.calendar?.days?.[initialData.calendar.days.length - 1] || null
+  );
 
   async function refreshData() {
     setIsRefreshing(true);
@@ -23,6 +29,13 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
         if (json.success && json.data) {
           setData(json.data);
           setLastRefreshedAt(new Date());
+          // Update selected day if it matches the current selection date
+          if (selectedDay) {
+            const updatedMatch = json.data.calendar?.days?.find(
+              (d: PublicDailyUptime) => d.date === selectedDay.date
+            );
+            if (updatedMatch) setSelectedDay(updatedMatch);
+          }
         }
       }
     } catch {
@@ -61,92 +74,143 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
     return `${hrs}h ${remMins}m`;
   }
 
-  function getBadgeColor(type: string) {
-    const upper = type.toUpperCase();
-    if (upper === "DETECTED") return "bg-rose-950 text-rose-300 border-rose-800";
-    if (upper === "RESOLVED") return "bg-emerald-950 text-emerald-300 border-emerald-800";
-    if (upper === "INVESTIGATING") return "bg-amber-950 text-amber-300 border-amber-800";
-    if (upper === "IDENTIFIED") return "bg-purple-950 text-purple-300 border-purple-800";
-    return "bg-indigo-950 text-indigo-300 border-indigo-800";
+  function getBadgeColor(type: string): string {
+    switch (type.toUpperCase()) {
+      case "RESOLVED":
+        return "bg-emerald-950 text-emerald-300 border-emerald-800";
+      case "INVESTIGATING":
+        return "bg-amber-950 text-amber-300 border-amber-800";
+      case "IDENTIFIED":
+        return "bg-indigo-950 text-indigo-300 border-indigo-800";
+      case "MONITORING":
+        return "bg-sky-950 text-sky-300 border-sky-800";
+      case "DETECTED":
+        return "bg-rose-950 text-rose-300 border-rose-800";
+      default:
+        return "bg-slate-800 text-slate-300 border-slate-700";
+    }
+  }
+
+  function getDayColor(day: PublicDailyUptime): string {
+    switch (day.status) {
+      case "OPERATIONAL":
+        return "bg-emerald-500 hover:bg-emerald-400";
+      case "DEGRADED":
+        return "bg-amber-500 hover:bg-amber-400";
+      case "OUTAGE":
+        return "bg-rose-500 hover:bg-rose-400";
+      case "NO_DATA":
+      default:
+        return "bg-slate-800 hover:bg-slate-700";
+    }
+  }
+
+  function formatDayDate(dateStr: string): string {
+    const parts = dateStr.split("-").map(Number);
+    if (parts.length === 3) {
+      const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+      return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+    }
+    return dateStr;
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/20">
       {/* Top Header */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="mx-auto max-w-4xl px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-sm">
-              ▲
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 shadow-md shadow-emerald-950/40 font-bold text-white text-base">
+              UA
             </div>
             <div>
-              <h1 className="text-base font-semibold text-white tracking-tight">{data.name}</h1>
-              <span className="text-[11px] text-slate-400">System Status & Reliability Report</span>
+              <h1 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                {data.name}
+              </h1>
+              <p className="text-[11px] text-slate-400 font-medium">Service Status Page</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
-              Updated {lastRefreshedAt.toLocaleTimeString()}
+            <span className="text-[11px] text-slate-400 hidden sm:inline">
+              Refreshed: {lastRefreshedAt.toLocaleTimeString()}
             </span>
             <button
-              onClick={() => refreshData()}
+              onClick={refreshData}
               disabled={isRefreshing}
-              className="rounded-lg bg-slate-900 border border-slate-800 px-3 py-1 text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-50"
+              title="Refresh status data"
             >
-              {isRefreshing ? "Refreshing..." : "↻ Refresh"}
+              <span className={`h-2 w-2 rounded-full bg-emerald-400 ${isRefreshing ? "animate-ping" : ""}`} />
+              {isRefreshing ? "Refreshing..." : "Refresh"}
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-8 space-y-8">
-        {/* Overall System Banner */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
+        {/* Banner: Overall Operational State */}
         <section
-          className={`rounded-2xl border p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+          className={`rounded-2xl border p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl ${
             isOperational
-              ? "border-emerald-900/60 bg-emerald-950/20"
+              ? "bg-emerald-950/30 border-emerald-800/80 shadow-emerald-950/20"
               : isDown
-              ? "border-rose-900/60 bg-rose-950/20"
-              : "border-amber-900/60 bg-amber-950/20"
+              ? "bg-rose-950/30 border-rose-800/80 shadow-rose-950/20"
+              : "bg-amber-950/30 border-amber-800/80 shadow-amber-950/20"
           }`}
         >
-          <div className="flex items-center gap-4">
-            <span
-              className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-bold ${
-                isOperational
-                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                  : isDown
-                  ? "bg-rose-500/10 text-rose-400 border border-rose-500/30 animate-pulse"
-                  : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-              }`}
-            >
-              {isOperational ? "✓" : isDown ? "⚠" : "○"}
-            </span>
-            <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`relative flex h-3.5 w-3.5 rounded-full ${
+                  isOperational
+                    ? "bg-emerald-400"
+                    : isDown
+                    ? "bg-rose-500 animate-pulse"
+                    : "bg-amber-400"
+                }`}
+              >
+                <span
+                  className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    isOperational
+                      ? "animate-ping bg-emerald-400"
+                      : isDown
+                      ? "animate-ping bg-rose-400"
+                      : "animate-ping bg-amber-400"
+                  }`}
+                />
+              </span>
+              <h2 className="text-xl font-bold text-white tracking-tight">
                 {isOperational
                   ? "All Systems Operational"
                   : isDown
-                  ? "Service Outage / Disruption Detected"
-                  : "Status Pending"}
+                  ? "Service Experiencing Outage"
+                  : "Service State Degraded"}
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {data.lastCheckedAt
-                  ? `Last verified probe: ${new Date(data.lastCheckedAt).toLocaleString()}`
-                  : "Awaiting initial probe result"}
-              </p>
             </div>
+            <p className="text-xs text-slate-300">
+              {isOperational
+                ? "All monitored probes are responding normally with expected status codes."
+                : isDown
+                ? "Automated probes have detected service failures or open incidents are being investigated."
+                : "Recent probe checks have reported elevated response latency or warnings."}
+            </p>
           </div>
 
-          <div className="sm:text-right">
+          <div className="flex sm:flex-col items-baseline sm:items-end justify-between border-t sm:border-t-0 border-slate-800/60 pt-3 sm:pt-0">
+            <span className="text-[11px] text-slate-400">Current Health</span>
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
                 isOperational
-                  ? "bg-emerald-950 text-emerald-400 border-emerald-800"
+                  ? "bg-emerald-950 text-emerald-300 border-emerald-800"
                   : isDown
-                  ? "bg-rose-950 text-rose-400 border-rose-800"
+                  ? "bg-rose-950 text-rose-300 border-rose-800"
                   : "bg-amber-950 text-amber-400 border-amber-800"
               }`}
             >
@@ -219,12 +283,235 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
           </section>
         )}
 
+        {/* 90-Day Historical Uptime Calendar Section */}
+        {data.calendar && (
+          <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white">90-Day Historical Uptime</h3>
+                <p className="text-xs text-slate-400">
+                  Daily availability calculated from recorded probes (evaluated in UTC)
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <span className="text-[11px] text-slate-400 block">90-Day Availability</span>
+                  <span
+                    className={`text-sm font-bold font-mono ${
+                      data.calendar.overallUptimePercentage !== null
+                        ? data.calendar.overallUptimePercentage >= 99
+                          ? "text-emerald-400"
+                          : data.calendar.overallUptimePercentage >= 95
+                          ? "text-amber-400"
+                          : "text-rose-400"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {data.calendar.overallUptimePercentage !== null
+                      ? `${data.calendar.overallUptimePercentage.toFixed(2)}%`
+                      : "No data"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar Bars: 90 daily pills */}
+            <div className="space-y-2">
+              <div className="flex items-end gap-[3px] sm:gap-1 h-10 w-full overflow-x-auto py-1">
+                {data.calendar.days.map((day) => {
+                  const isSelected = selectedDay?.date === day.date;
+                  return (
+                    <button
+                      key={day.date}
+                      type="button"
+                      onClick={() => setSelectedDay(day)}
+                      title={`${formatDayDate(day.date)}: ${
+                        day.uptimePercentage !== null
+                          ? `${day.uptimePercentage.toFixed(2)}% uptime (${day.totalChecks} checks)`
+                          : "No data recorded"
+                      }`}
+                      aria-label={`Inspect ${day.date}`}
+                      className={`flex-1 min-w-[6px] h-8 rounded-sm transition-all duration-150 ${getDayColor(
+                        day
+                      )} ${
+                        isSelected
+                          ? "ring-2 ring-white scale-110 z-10"
+                          : "opacity-90 hover:opacity-100 hover:scale-105"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Range labels and legend */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-[11px] text-slate-500">
+                <span className="font-mono">
+                  {formatDayDate(data.calendar.periodStart)} (90 days ago)
+                </span>
+
+                {/* Legend */}
+                <div className="flex items-center gap-3 self-center">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span>Operational</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" />
+                    <span>Degraded</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                    <span>Outage</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-slate-800 border border-slate-700" />
+                    <span>No data</span>
+                  </div>
+                </div>
+
+                <span className="font-mono text-right">
+                  Today ({formatDayDate(data.calendar.periodEnd)})
+                </span>
+              </div>
+            </div>
+
+            {/* Selected Day Inspector Panel */}
+            {selectedDay && (
+              <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-4 space-y-3 transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
+                      Daily Inspection
+                    </span>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      {formatDayDate(selectedDay.date)}
+                      <span className="text-[10px] text-slate-500 font-mono font-normal">
+                        (00:00 - 23:59 UTC)
+                      </span>
+                    </h4>
+                  </div>
+
+                  <div>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                        selectedDay.status === "OPERATIONAL"
+                          ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                          : selectedDay.status === "DEGRADED"
+                          ? "bg-amber-950 text-amber-300 border-amber-800"
+                          : selectedDay.status === "OUTAGE"
+                          ? "bg-rose-950 text-rose-300 border-rose-800"
+                          : "bg-slate-900 text-slate-400 border-slate-800"
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          selectedDay.status === "OPERATIONAL"
+                            ? "bg-emerald-400"
+                            : selectedDay.status === "DEGRADED"
+                            ? "bg-amber-400"
+                            : selectedDay.status === "OUTAGE"
+                            ? "bg-rose-400"
+                            : "bg-slate-500"
+                        }`}
+                      />
+                      {selectedDay.status === "OPERATIONAL"
+                        ? "100.00% Operational"
+                        : selectedDay.status === "DEGRADED"
+                        ? `${selectedDay.uptimePercentage?.toFixed(2)}% Degraded`
+                        : selectedDay.status === "OUTAGE"
+                        ? "0.00% Major Outage"
+                        : "No Data Recorded"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Day stats grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="rounded bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <span className="text-slate-400 block text-[10px] uppercase">Daily Availability</span>
+                    <p className="text-base font-bold font-mono text-white mt-0.5">
+                      {selectedDay.uptimePercentage !== null
+                        ? `${selectedDay.uptimePercentage.toFixed(2)}%`
+                        : "No data"}
+                    </p>
+                  </div>
+
+                  <div className="rounded bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <span className="text-slate-400 block text-[10px] uppercase">Recorded Probes</span>
+                    <p className="text-base font-bold font-mono text-white mt-0.5">
+                      {selectedDay.totalChecks}
+                    </p>
+                    <span className="text-[10px] text-slate-500 block">
+                      {selectedDay.upChecks} UP / {selectedDay.downChecks} DOWN
+                    </span>
+                  </div>
+
+                  <div className="rounded bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <span className="text-slate-400 block text-[10px] uppercase">Avg Latency</span>
+                    <p className="text-base font-bold font-mono text-white mt-0.5">
+                      {selectedDay.avgResponseTimeMs !== null
+                        ? `${selectedDay.avgResponseTimeMs} ms`
+                        : "--"}
+                    </p>
+                  </div>
+
+                  <div className="rounded bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <span className="text-slate-400 block text-[10px] uppercase">Day Incidents</span>
+                    <p
+                      className={`text-base font-bold font-mono mt-0.5 ${
+                        selectedDay.incidentCount > 0 ? "text-rose-400" : "text-emerald-400"
+                      }`}
+                    >
+                      {selectedDay.incidentCount}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Incidents associated with this day */}
+                {selectedDay.incidents.length > 0 ? (
+                  <div className="pt-2 border-t border-slate-800/60 space-y-2">
+                    <span className="text-[11px] font-semibold text-rose-300 uppercase tracking-wider block">
+                      Incidents On This Day ({selectedDay.incidents.length})
+                    </span>
+                    <div className="space-y-2">
+                      {selectedDay.incidents.map((inc, incIdx) => (
+                        <div
+                          key={incIdx}
+                          className="rounded border border-rose-950 bg-rose-950/20 p-2.5 text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-rose-200">{inc.title}</span>
+                            <span className="text-[10px] text-slate-400">
+                              Duration: {formatDuration(inc.durationSeconds)}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex flex-wrap gap-x-4">
+                            <span>Started: {new Date(inc.startedAt).toUTCString()}</span>
+                            {inc.resolvedAt && (
+                              <span>Resolved: {new Date(inc.resolvedAt).toUTCString()}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 italic pt-1">
+                    No service disruptions or incidents were reported on this day.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Reliability Analytics & Uptime Section */}
         <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div>
-              <h3 className="text-sm font-semibold text-white">Historical Reliability & Latency</h3>
-              <p className="text-xs text-slate-400">Database-recorded probe metrics across rolling windows</p>
+              <h3 className="text-sm font-semibold text-white">Rolling Window Metrics</h3>
+              <p className="text-xs text-slate-400">Probe availability and latency computed across rolling timeframes</p>
             </div>
 
             {/* Window selector */}
@@ -350,36 +637,49 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
                         <span className="rounded bg-emerald-950 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-800">
                           RESOLVED
                         </span>
-                        <h4 className="text-xs font-semibold text-white">{inc.title}</h4>
+                        <h4 className="text-sm font-semibold text-white">{inc.title}</h4>
                       </div>
-                      <p className="text-[11px] font-mono text-slate-500 mt-1">
-                        Started: {new Date(inc.startedAt).toLocaleString()} • Resolved:{" "}
-                        {inc.resolvedAt ? new Date(inc.resolvedAt).toLocaleString() : "--"}
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Started: {new Date(inc.startedAt).toLocaleString()}
+                        {inc.resolvedAt && ` • Resolved: ${new Date(inc.resolvedAt).toLocaleString()}`}
                       </p>
                     </div>
 
                     <div className="text-left sm:text-right">
-                      <span className="text-[10px] text-slate-500 block">Downtime</span>
-                      <span className="text-xs font-mono font-semibold text-slate-300">
+                      <span className="text-[11px] text-slate-400 block">Outage Duration</span>
+                      <span className="text-xs font-mono font-semibold text-slate-200">
                         {formatDuration(inc.durationSeconds)}
                       </span>
                     </div>
                   </div>
 
                   {inc.events.length > 0 && (
-                    <div className="border-t border-slate-800/80 pt-2.5 space-y-2">
-                      {inc.events.map((evt, eIdx) => (
-                        <div key={eIdx} className="text-[11px] flex items-start gap-2">
-                          <span
-                            className={`rounded px-1.5 py-0.2 text-[9px] font-semibold border ${getBadgeColor(
-                              evt.type
-                            )}`}
+                    <div className="border-t border-slate-800/80 pt-3 space-y-2">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                        Timeline Updates
+                      </span>
+                      <div className="space-y-2">
+                        {inc.events.map((event, eIdx) => (
+                          <div
+                            key={eIdx}
+                            className="rounded bg-slate-900/60 border border-slate-800/60 p-2.5 text-xs space-y-1"
                           >
-                            {evt.type}
-                          </span>
-                          <span className="text-slate-300 leading-relaxed">{evt.message}</span>
-                        </div>
-                      ))}
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold border ${getBadgeColor(
+                                  event.type
+                                )}`}
+                              >
+                                {event.type}
+                              </span>
+                              <span className="text-[11px] font-mono text-slate-500">
+                                {new Date(event.createdAt).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed">{event.message}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -390,12 +690,11 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
-        Powered by{" "}
-        <a href="/" className="font-semibold text-slate-400 hover:text-white transition-colors">
-          Uptime Atlas
-        </a>{" "}
-        • Precision Endpoint Monitoring & Status Reporting
+      <footer className="border-t border-slate-800/80 bg-slate-900/30 py-6 text-center text-xs text-slate-500">
+        <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>Powered by <strong>Uptime Atlas</strong></span>
+          <span className="text-[11px]">Continuous Availability Monitoring & Reliability Analytics</span>
+        </div>
       </footer>
     </div>
   );

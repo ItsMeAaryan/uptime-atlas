@@ -120,3 +120,4 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
     expect(json.error).toContain("Invalid request payload");
   });
 });
+

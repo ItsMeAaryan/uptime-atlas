@@ -102,11 +102,30 @@ WORKER_LOCK_DURATION_MS=30000     # Lease duration before an uncompleted lock ex
 Uptime Atlas provides clean, public-facing status pages for external stakeholders with a strict privacy boundary:
 
 * **Stable Non-Guessable Identifier (`publicId`):** Each published monitor is accessed via a dedicated route `/status/:publicId` using a cryptographically secure 128-bit hex token (e.g., `pub_7f8a1...`).
-* **Strict Privacy Boundary:** Target URLs (`url`), database primary keys (`id`, `monitorId`), internal worker errors, and server network details are **never** exposed publicly. Public status responses contain only user-facing telemetry: service name, operational status, last checked timestamp, 24h/7d/30d reliability metrics, active incidents, and resolved incident history.
+* **Strict Privacy Boundary:** Target URLs (`url`), database primary keys (`id`, `monitorId`), internal worker errors, stack traces, and server network details are **never** exposed publicly. Public tokens are omitted from response bodies to prevent token leakage in client caches or logs. Error responses on public endpoints return sanitized messages without exception details.
+* **Timeline Message Sanitization:** Automated incident events (`DETECTED`, `RESOLVED`) display clean, user-friendly descriptions. Operator timeline notes automatically redact URLs, internal IP addresses, and credential tokens.
 * **Explicit Opt-in Publication:** Monitors default to private (`isPublic: false`). A status page is only visible when an operator explicitly publishes it via the dashboard toggle or API.
 * **404 Handling:** Requests to disabled, private, or non-existent status tokens return a clean 404 response without leaking monitor existence or configuration details.
-* **Token Rotation:** Operators can rotate/regenerate the `publicId` token at any time via `PATCH /api/monitors/:id/publication`, instantly invalidating the previous public URL.
+* **Token Rotation:** Operators can rotate/regenerate the `publicId` token at any time via `PATCH /api/monitors/:id/publication` or the dashboard **Rotate Link** button, instantly invalidating the previous public URL.
 * **Live Refresh:** Public status pages automatically poll for updates every 30 seconds with an interactive manual refresh control and time-window selector (24h, 7d, 30d).
+
+---
+
+## 90-Day Historical Uptime Calendar
+
+Public status pages include an interactive 90-calendar-day historical availability calendar:
+
+* **Deterministic UTC Day Boundaries:** Every daily interval is evaluated strictly in UTC (`00:00:00.000` to `23:59:59.999 UTC`), ensuring consistent day boundaries across all client timezones.
+* **Actual Recorded Checks (No Estimates):** Availability is computed from discrete recorded checks:
+  $$\text{Daily Uptime \%} = \left(\frac{\text{UP Probes}}{\text{Total Probes}}\right) \times 100$$
+* **Explicit "No Data" Categorization:** Days with zero recorded probes evaluate to `status: "NO_DATA"` with `uptimePercentage: null`. Days without recorded probes are **never** assumed or displayed as 100% uptime.
+* **Daily Status Categories:**
+  - `OPERATIONAL` (Emerald): $\text{Total Checks} > 0$ and $\text{Down Checks} = 0$ (100% uptime).
+  - `DEGRADED` (Amber): $\text{Total Checks} > 0$, $\text{Down Checks} > 0$, and $\text{Up Checks} > 0$ (partial outage).
+  - `OUTAGE` (Rose): $\text{Total Checks} > 0$ and $\text{Up Checks} = 0$ (0% uptime).
+  - `NO_DATA` (Slate): $\text{Total Checks} = 0$ (no probes executed on this calendar day).
+* **Interactive Day Inspection:** Clicking or tapping any day block reveals a detailed inspection card showing formatted UTC date, status badge, daily availability %, total/up/down check counts, average response latency, and any overlapping incidents with timestamps and outage durations.
+* **Current Partial Day Handling:** Today (day 0) is evaluated from 00:00:00 UTC up to the current timestamp.
 
 ---
 
@@ -125,7 +144,7 @@ Uptime Atlas provides clean, public-facing status pages for external stakeholder
 * `POST /api/incidents/:id/resolve`: Manually resolve an open incident with a closing note.
 
 ### Public Endpoints
-* `GET /api/status/:publicId`: Public read-only endpoint returning sanitized monitor telemetry, rolling metrics, and incident timelines.
+* `GET /api/status/:publicId`: Public read-only endpoint returning sanitized monitor telemetry, 90-day calendar, rolling metrics, and incident timelines.
 * `GET /status/:publicId`: Public status page UI.
 
 ---
@@ -146,4 +165,5 @@ Tests cover:
 * **Incident Lifecycle:** Threshold triggering (3rd consecutive failure), non-duplication of open incidents, recovery resolution, duration calculation, and concurrent race safety (`P2002`).
 * **Reliability Analytics:** Empty windows (`null` / No data), all-success windows (100%), all-failure windows (0%), mixed windows, and P95 latency percentile math.
 * **Timeline Events:** Chronological event tracking, operator notes validation, and manual incident resolution.
-* **Public Status Pages & Privacy:** Secure token generation, publication state toggles, token rotation, 404 responses for unpublished or missing monitors, and end-to-end assertions verifying target URLs and internal IDs are never leaked.
+* **Public Status Pages & Privacy:** Secure token generation, publication state toggles, token rotation, 404 responses for unpublished or missing monitors, token omission from response bodies, error message redaction, and assertions verifying target URLs and internal IDs are never leaked.
+* **90-Day Historical Calendar:** 90 calendar days in UTC, empty day handling (never 100%), daily uptime calculations, latency aggregation, partial day handling, and overlapping incident associations.

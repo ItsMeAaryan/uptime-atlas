@@ -24,11 +24,11 @@ export async function GET(_request: Request, context: RouteContext) {
       success: true,
       data,
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Internal Server Error";
+  } catch {
     return NextResponse.json(
-      { success: false, error: "Failed to load public status page", details: message },
+      { success: false, error: "Failed to load public status page" },
       { status: 500 }
     );
   }
 }
+
