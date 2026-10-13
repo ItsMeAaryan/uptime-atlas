@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import MonitorAnalyticsModal from "./monitor-analytics-modal";
 import IncidentTimelineModal from "./incident-timeline-modal";
+import { adminFetch } from "@/lib/api-client";
 
 interface LatestCheck {
   id: string;
@@ -64,13 +65,18 @@ interface IncidentListItem {
   } | null;
 }
 
-export default function Dashboard() {
+interface DashboardProps {
+  operatorUsername?: string;
+}
+
+export default function Dashboard({ operatorUsername }: DashboardProps = {}) {
   const [activeView, setActiveView] = useState<"monitors" | "incidents">("monitors");
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [incidents, setIncidents] = useState<IncidentListItem[]>([]);
   const [incidentFilter, setIncidentFilter] = useState<"ALL" | "OPEN" | "RESOLVED">("ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Form states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -88,9 +94,32 @@ export default function Dashboard() {
   const [analyticsTarget, setAnalyticsTarget] = useState<{ id: string; name: string } | null>(null);
   const [timelineIncidentId, setTimelineIncidentId] = useState<string | null>(null);
 
+  async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
+        window.location.href = "/login";
+        return;
+      }
+      alert("Failed to log out. Please try again.");
+    } catch {
+      alert("Network error during logout.");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
   async function fetchMonitors() {
     try {
-      const res = await fetch("/api/monitors");
+      const res = await adminFetch("/api/monitors");
       const json = await res.json();
       if (json.success) {
         setMonitors(json.data);
@@ -104,7 +133,7 @@ export default function Dashboard() {
 
   async function fetchIncidents() {
     try {
-      const res = await fetch("/api/incidents");
+      const res = await adminFetch("/api/incidents");
       const json = await res.json();
       if (json.success) {
         setIncidents(json.data);
@@ -131,7 +160,7 @@ export default function Dashboard() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/monitors", {
+      const res = await adminFetch("/api/monitors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -172,7 +201,7 @@ export default function Dashboard() {
 
   async function handleTogglePublication(id: string, currentIsPublic: boolean) {
     try {
-      const res = await fetch(`/api/monitors/${id}/publication`, {
+      const res = await adminFetch(`/api/monitors/${id}/publication`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPublic: !currentIsPublic }),
@@ -203,7 +232,7 @@ export default function Dashboard() {
       return;
     }
     try {
-      const res = await fetch(`/api/monitors/${id}/publication`, {
+      const res = await adminFetch(`/api/monitors/${id}/publication`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ regenerate: true }),
@@ -226,7 +255,7 @@ export default function Dashboard() {
   async function handleManualCheck(id: string) {
     setCheckingMonitorId(id);
     try {
-      const res = await fetch(`/api/monitors/${id}/check`, {
+      const res = await adminFetch(`/api/monitors/${id}/check`, {
         method: "POST",
       });
       const json = await res.json();
@@ -246,7 +275,7 @@ export default function Dashboard() {
     if (!confirm(`Are you sure you want to delete monitor "${name}"?`)) return;
 
     try {
-      const res = await fetch(`/api/monitors/${id}`, { method: "DELETE" });
+      const res = await adminFetch(`/api/monitors/${id}`, { method: "DELETE" });
       if (res.ok) {
         await refreshAll();
       } else {
@@ -354,6 +383,25 @@ export default function Dashboard() {
             >
               + Add Monitor
             </button>
+
+            {/* Operator & Logout */}
+            <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
+              <span
+                className="flex items-center gap-1.5 rounded-md bg-slate-800/80 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-700/60"
+                title="Authenticated Operator"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="font-mono text-slate-200">{operatorUsername || "operator"}</span>
+              </span>
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-rose-950/40 hover:border-rose-800/60 hover:text-rose-300 transition-colors disabled:opacity-50"
+                title="Log out of session"
+              >
+                {isLoggingOut ? "Logging out..." : "Log out"}
+              </button>
+            </div>
           </div>
         </div>
       </header>

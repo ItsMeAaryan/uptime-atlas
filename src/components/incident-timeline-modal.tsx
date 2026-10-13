@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/api-client";
 
 interface IncidentEvent {
   id: string;
@@ -54,7 +55,7 @@ export default function IncidentTimelineModal({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/incidents/${incidentId}`);
+      const res = await adminFetch(`/api/incidents/${incidentId}`);
       const json = await res.json();
       if (json.success) {
         setIncident(json.data);
@@ -78,7 +79,7 @@ export default function IncidentTimelineModal({
 
     setIsSubmittingNote(true);
     try {
-      const res = await fetch(`/api/incidents/${incidentId}/events`, {
+      const res = await adminFetch(`/api/incidents/${incidentId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -107,7 +108,7 @@ export default function IncidentTimelineModal({
 
     setIsResolving(true);
     try {
-      const res = await fetch(`/api/incidents/${incidentId}`, {
+      const res = await adminFetch(`/api/incidents/${incidentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

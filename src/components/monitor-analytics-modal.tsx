@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/api-client";
 
 interface WindowMetrics {
   windowLabel: string;
@@ -54,7 +55,7 @@ export default function MonitorAnalyticsModal({ monitorId, monitorName, onClose 
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/monitors/${monitorId}/analytics`);
+        const res = await adminFetch(`/api/monitors/${monitorId}/analytics`);
         const json = await res.json();
         if (json.success && isMounted) {
           setData(json.data);
