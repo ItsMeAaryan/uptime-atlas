@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Uptime Atlas
 
-## Getting Started
+**Uptime Atlas** is a website uptime monitoring and incident tracking platform built with **Next.js (App Router)**, **TypeScript**, **PostgreSQL**, and **Prisma**.
 
-First, run the development server:
+---
 
+## Architecture Overview
+
+Uptime Atlas consists of two decoupled, cooperative processes sharing a single PostgreSQL database:
+
+1. **Web Application (`npm run dev`)**:
+   - Built with Next.js 16 (App Router), React 19, and Tailwind CSS.
+   - Provides operator dashboard, monitor registration form, and API endpoints (`/api/monitors`).
+   - Supports manual on-demand checks (`POST /api/monitors/:id/check`).
+
+2. **Background Monitoring Worker (`npm run worker`)**:
+   - A standalone, continuous TypeScript process running independently of Next.js.
+   - Periodically queries PostgreSQL for active monitors that are due for their next check based on their configured interval (`intervalSeconds`).
+   - Uses an atomic database-backed lock (`lockedUntil` via `FOR UPDATE SKIP LOCKED`) to prevent overlapping ticks or multiple worker instances from probing the same endpoint simultaneously.
+   - Executes HTTP/HTTPS probes with SSRF protection, measures latency, records results into `CheckResult`, updates monitor health, and releases the lock.
+
+> [!NOTE]
+> Monitoring happens asynchronously in PostgreSQL. When the worker process is running, endpoints are polled automatically. If the background worker process is stopped, automatic monitoring pauses until the worker is restarted (manual checks in the web app remain functional).
+
+---
+
+## Running in Development
+
+Running Uptime Atlas requires two terminal windows:
+
+### Terminal 1: Next.js Web App
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser to view the dashboard and register monitors.
+
+### Terminal 2: Background Monitoring Worker
+```bash
+npm run worker
+```
+The worker will start polling for due monitors at the configured interval (default: every 5 seconds).
+
+---
+
+## Configuration (`.env.local`)
+
+Create a `.env.local` file in the project root:
+
+```env
+DATABASE_URL="postgresql://postgres:<YOUR_PASSWORD>@localhost:5432/uptime_atlas?schema=public"
+
+# Optional worker tuning
+WORKER_POLL_INTERVAL_MS=5000       # Polling loop frequency in milliseconds (default: 5000)
+WORKER_BATCH_SIZE=10              # Maximum monitors claimed per batch (default: 10)
+WORKER_LOCK_DURATION_MS=30000     # Lease duration before an uncompleted lock expires (default: 30000)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database Management
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+* **Apply Schema:** `npm run db:push` (automatically syncs schema to PostgreSQL using `.env.local`)
+* **Generate Client:** `npm run db:generate`
+* **Browse Database:** `npm run db:studio`
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Testing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Run unit and integration test suites:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run test
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tests cover:
+* **SSRF Protection:** Loopback, private IP ranges (RFC 1918), cloud metadata (169.254.169.254), and DNS rebinding checks.
+* **Input Validation:** Name lengths, bounded timeouts, status codes, and slug generators.
+* **HTTP Prober:** Mocked network calls, timeouts, stream cancellation, and latency tracking.
+* **Worker Scheduler & Runner:** Due-monitor selection, atomic claim locking, failure isolation, and graceful shutdown.

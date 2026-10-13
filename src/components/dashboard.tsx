@@ -344,8 +344,13 @@ export default function Dashboard() {
                           )}
                         </td>
 
-                        <td className="px-6 py-4 whitespace-nowrap text-slate-400">
-                          {m.lastCheckedAt ? new Date(m.lastCheckedAt).toLocaleTimeString() : "Never"}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-slate-300">
+                            {m.lastCheckedAt ? new Date(m.lastCheckedAt).toLocaleTimeString() : "Never checked"}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            Interval: {m.intervalSeconds}s
+                          </div>
                         </td>
 
                         <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">

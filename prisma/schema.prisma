@@ -39,6 +39,7 @@ model Monitor {
   currentStatus       MonitorStatus  @default(PENDING)
   consecutiveFailures Int            @default(0)
   lastCheckedAt       DateTime?
+  lockedUntil         DateTime?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
