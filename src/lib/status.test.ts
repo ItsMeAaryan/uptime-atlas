@@ -27,3 +27,4 @@ describe("Uptime Atlas monitoring helpers", () => {
     expect(isValidHttpUrl("invalid-url")).toBe(false);
   });
 });
+

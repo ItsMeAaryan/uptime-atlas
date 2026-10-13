@@ -77,3 +77,4 @@ model Incident {
 
   @@map("incidents")
 }
+
