@@ -7,7 +7,7 @@ interface WindowMetrics {
   totalChecks: number;
   upChecks: number;
   downChecks: number;
-  uptimePercentage: number;
+  uptimePercentage: number | null;
   avgResponseTimeMs: number | null;
   p95ResponseTimeMs: number | null;
   totalIncidents: number;
@@ -143,19 +143,27 @@ export default function MonitorAnalyticsModal({ monitorId, monitorName, onClose 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3.5">
                 <span className="text-[11px] text-slate-400 uppercase tracking-wider">Uptime</span>
-                <p
-                  className={`mt-1 text-xl font-bold font-mono ${
-                    selectedMetrics.uptimePercentage >= 99
-                      ? "text-emerald-400"
-                      : selectedMetrics.uptimePercentage >= 95
-                      ? "text-amber-400"
-                      : "text-rose-400"
-                  }`}
-                >
-                  {selectedMetrics.uptimePercentage.toFixed(2)}%
-                </p>
+                {selectedMetrics.uptimePercentage !== null ? (
+                  <p
+                    className={`mt-1 text-xl font-bold font-mono ${
+                      selectedMetrics.uptimePercentage >= 99
+                        ? "text-emerald-400"
+                        : selectedMetrics.uptimePercentage >= 95
+                        ? "text-amber-400"
+                        : "text-rose-400"
+                    }`}
+                  >
+                    {selectedMetrics.uptimePercentage.toFixed(2)}%
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xl font-bold font-mono text-slate-500">
+                    No data
+                  </p>
+                )}
                 <span className="text-[10px] text-slate-500">
-                  {selectedMetrics.upChecks} / {selectedMetrics.totalChecks} checks
+                  {selectedMetrics.totalChecks > 0
+                    ? `${selectedMetrics.upChecks} / ${selectedMetrics.totalChecks} checks`
+                    : "0 checks recorded"}
                 </span>
               </div>
 

@@ -5,7 +5,7 @@ export interface WindowMetrics {
   totalChecks: number;
   upChecks: number;
   downChecks: number;
-  uptimePercentage: number;
+  uptimePercentage: number | null;
   avgResponseTimeMs: number | null;
   p95ResponseTimeMs: number | null;
   totalIncidents: number;
@@ -63,7 +63,7 @@ function computeWindowMetrics(
   const downChecks = windowChecks.filter((c) => c.status === "DOWN").length;
 
   const uptimePercentage =
-    totalChecks > 0 ? Number(((upChecks / totalChecks) * 100).toFixed(2)) : 100.0;
+    totalChecks > 0 ? Number(((upChecks / totalChecks) * 100).toFixed(2)) : null;
 
   const latencies = windowChecks
     .filter((c) => c.status === "UP" && typeof c.responseTimeMs === "number")
@@ -157,7 +157,7 @@ export async function getMonitorAnalytics(monitorId: string): Promise<MonitorAna
     monitorId,
     timestamp: now.toISOString(),
     limitationNotice:
-      "Sample-based uptime computes the ratio of successful discrete probes to total probes executed. It does not measure continuous wall-clock downtime between polling intervals or periods when the monitoring worker was stopped.",
+      "Sample-based uptime computes the ratio of successful discrete probes to total probes executed. When a window has zero recorded checks, uptime is reported as null ('No data'). It does not measure continuous wall-clock downtime between polling intervals or periods when the monitoring worker was stopped.",
     windows: {
       last24Hours: computeWindowMetrics("24 Hours", checks, incidents, twentyFourHoursAgo),
       last7Days: computeWindowMetrics("7 Days", checks, incidents, sevenDaysAgo),
@@ -166,3 +166,4 @@ export async function getMonitorAnalytics(monitorId: string): Promise<MonitorAna
     activeIncident,
   };
 }
+

@@ -53,7 +53,7 @@ describe("Analytics Service", () => {
   });
 
   describe("getMonitorAnalytics", () => {
-    it("computes sample-based uptime, average, and P95 latency across windows", async () => {
+    it("computes sample-based uptime, average, and P95 latency for mixed results (mixed window)", async () => {
       const now = new Date();
       const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -94,16 +94,68 @@ describe("Analytics Service", () => {
       expect(analytics.activeIncident).toBeNull();
     });
 
-    it("returns 100% uptime when no check records exist in window", async () => {
+    it("returns null (no data) for uptimePercentage when no check records exist in window (empty window)", async () => {
       (prisma.checkResult.findMany as any).mockResolvedValueOnce([]);
       (prisma.incident.findMany as any).mockResolvedValueOnce([]);
 
       const analytics = await getMonitorAnalytics("mon-empty");
 
-      expect(analytics.windows.last24Hours.totalChecks).toBe(0);
-      expect(analytics.windows.last24Hours.uptimePercentage).toBe(100.0);
-      expect(analytics.windows.last24Hours.avgResponseTimeMs).toBeNull();
-      expect(analytics.windows.last24Hours.p95ResponseTimeMs).toBeNull();
+      const m24 = analytics.windows.last24Hours;
+      expect(m24.totalChecks).toBe(0);
+      expect(m24.upChecks).toBe(0);
+      expect(m24.downChecks).toBe(0);
+      expect(m24.uptimePercentage).toBeNull();
+      expect(m24.avgResponseTimeMs).toBeNull();
+      expect(m24.p95ResponseTimeMs).toBeNull();
+      expect(m24.totalIncidents).toBe(0);
+      expect(m24.resolvedIncidents).toBe(0);
+      expect(m24.meanTimeToResolutionSeconds).toBeNull();
+
+      expect(analytics.windows.last7Days.uptimePercentage).toBeNull();
+      expect(analytics.windows.last30Days.uptimePercentage).toBeNull();
+    });
+
+    it("computes genuine 100% uptime when all checks succeed in window (all-success window)", async () => {
+      const now = new Date();
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+
+      (prisma.checkResult.findMany as any).mockResolvedValueOnce([
+        { status: "UP", responseTimeMs: 25, checkedAt: fiveMinutesAgo },
+        { status: "UP", responseTimeMs: 30, checkedAt: fiveMinutesAgo },
+        { status: "UP", responseTimeMs: 35, checkedAt: fiveMinutesAgo },
+      ]);
+      (prisma.incident.findMany as any).mockResolvedValueOnce([]);
+
+      const analytics = await getMonitorAnalytics("mon-all-success");
+
+      const m24 = analytics.windows.last24Hours;
+      expect(m24.totalChecks).toBe(3);
+      expect(m24.upChecks).toBe(3);
+      expect(m24.downChecks).toBe(0);
+      expect(m24.uptimePercentage).toBe(100.0);
+      expect(m24.avgResponseTimeMs).toBe(30);
+      expect(m24.p95ResponseTimeMs).toBe(35);
+    });
+
+    it("computes 0% uptime when all checks fail in window (all-failure window)", async () => {
+      const now = new Date();
+      const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+
+      (prisma.checkResult.findMany as any).mockResolvedValueOnce([
+        { status: "DOWN", responseTimeMs: null, checkedAt: tenMinutesAgo },
+        { status: "DOWN", responseTimeMs: null, checkedAt: tenMinutesAgo },
+      ]);
+      (prisma.incident.findMany as any).mockResolvedValueOnce([]);
+
+      const analytics = await getMonitorAnalytics("mon-all-failure");
+
+      const m24 = analytics.windows.last24Hours;
+      expect(m24.totalChecks).toBe(2);
+      expect(m24.upChecks).toBe(0);
+      expect(m24.downChecks).toBe(2);
+      expect(m24.uptimePercentage).toBe(0.0);
+      expect(m24.avgResponseTimeMs).toBeNull();
+      expect(m24.p95ResponseTimeMs).toBeNull();
     });
 
     it("identifies active open incident if present", async () => {
