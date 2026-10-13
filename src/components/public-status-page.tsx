@@ -15,10 +15,15 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
   const [data, setData] = useState<PublicStatusPageData>(initialData);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeWindow, setActiveWindow] = useState<"24h" | "7d" | "30d">("24h");
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [selectedDay, setSelectedDay] = useState<PublicDailyUptime | null>(
     initialData.calendar?.days?.[initialData.calendar.days.length - 1] || null
   );
+
+  // Initialize live refresh timestamp after component mounts on the client
+  useEffect(() => {
+    setLastRefreshedAt(new Date());
+  }, []);
 
   async function refreshData() {
     setIsRefreshing(true);
@@ -138,7 +143,7 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
 
           <div className="flex items-center gap-3">
             <span className="text-[11px] text-slate-400 hidden sm:inline">
-              Refreshed: {lastRefreshedAt.toLocaleTimeString()}
+              Refreshed: {lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString() : "--"}
             </span>
             <button
               onClick={refreshData}
@@ -244,7 +249,7 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
                 <div>
                   <h4 className="text-base font-semibold text-rose-200">{incident.title}</h4>
                   <p className="text-xs text-rose-300/80 mt-1">
-                    Started at {new Date(incident.startedAt).toLocaleString()}
+                    Started at {new Date(incident.startedAt).toUTCString()}
                   </p>
                 </div>
 
@@ -268,7 +273,7 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
                                 {event.type}
                               </span>
                               <span className="text-[11px] font-mono text-slate-500">
-                                {new Date(event.createdAt).toLocaleTimeString()}
+                                {new Date(event.createdAt).toUTCString()}
                               </span>
                             </div>
                             <p className="text-xs text-slate-200 leading-relaxed">{event.message}</p>
@@ -640,8 +645,8 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
                         <h4 className="text-sm font-semibold text-white">{inc.title}</h4>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Started: {new Date(inc.startedAt).toLocaleString()}
-                        {inc.resolvedAt && ` • Resolved: ${new Date(inc.resolvedAt).toLocaleString()}`}
+                        Started: {new Date(inc.startedAt).toUTCString()}
+                        {inc.resolvedAt && ` • Resolved: ${new Date(inc.resolvedAt).toUTCString()}`}
                       </p>
                     </div>
 
@@ -673,7 +678,7 @@ export default function PublicStatusPage({ initialData, publicId }: Props) {
                                 {event.type}
                               </span>
                               <span className="text-[11px] font-mono text-slate-500">
-                                {new Date(event.createdAt).toLocaleTimeString()}
+                                {new Date(event.createdAt).toUTCString()}
                               </span>
                             </div>
                             <p className="text-slate-300 text-xs leading-relaxed">{event.message}</p>
