@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MonitorStatus {
+  UP
+  DOWN
+  DEGRADED
+  PENDING
+}
+
+enum HttpMethod {
+  GET
+  HEAD
+  POST
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+model Monitor {
+  id                  String         @id @default(uuid())
+  name                String
+  slug                String         @unique
+  url                 String
+  method              HttpMethod     @default(GET)
+  intervalSeconds     Int            @default(60)
+  timeoutMs           Int            @default(5000)
+  expectedStatusCode  Int            @default(200)
+  isActive            Boolean        @default(true)
+  isPublic            Boolean        @default(true)
+  currentStatus       MonitorStatus  @default(PENDING)
+  consecutiveFailures Int            @default(0)
+  lastCheckedAt       DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  checkResults        CheckResult[]
+  incidents           Incident[]
+
+  @@map("monitors")
+}
+
+model CheckResult {
+  id             String        @id @default(uuid())
+  monitorId      String
+  status         MonitorStatus
+  statusCode     Int?
+  responseTimeMs Int?
+  errorMessage   String?
+  checkedAt      DateTime      @default(now())
+
+  monitor        Monitor       @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, checkedAt(sort: Desc)])
+  @@map("check_results")
+}
+
+model Incident {
+  id              String         @id @default(uuid())
+  monitorId       String
+  status          IncidentStatus @default(OPEN)
+  title           String
+  cause           String?
+  startedAt       DateTime       @default(now())
+  resolvedAt      DateTime?
+  durationSeconds Int?
+
+  monitor         Monitor        @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@map("incidents")
+}
