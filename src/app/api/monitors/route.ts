@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { validateMonitorInput } from "@/lib/validation/monitor";
 import { createMonitor, listMonitors, executeAndRecordCheck } from "@/lib/services/monitor-service";
+import { requireOperatorSession } from "@/lib/auth/guard";
+import { validateCsrfOrigin, validateJsonContentType } from "@/lib/auth/csrf";
 
 export async function GET() {
   try {
+    const auth = await requireOperatorSession();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
+
     const monitors = await listMonitors();
     return NextResponse.json({ success: true, data: monitors });
   } catch (error: unknown) {
@@ -17,6 +24,28 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // 1. Enforce operator authentication
+    const auth = await requireOperatorSession();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
+
+    // 2. Enforce CSRF Origin validation
+    const csrfCheck = validateCsrfOrigin(request);
+    if (!csrfCheck.isValid) {
+      return NextResponse.json(
+        { success: false, error: "Cross-origin request rejected." },
+        { status: 403 }
+      );
+    }
+
+    // 3. Enforce strict JSON Content-Type
+    if (!validateJsonContentType(request)) {
+      return NextResponse.json(
+        { success: false, error: "Content-Type must be application/json." },
+        { status: 415 }
+      );
+    }
     let body: unknown;
     try {
       body = await request.json();

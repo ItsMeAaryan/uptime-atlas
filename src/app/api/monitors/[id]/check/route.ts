@@ -1,12 +1,29 @@
 import { NextResponse } from "next/server";
 import { executeAndRecordCheck } from "@/lib/services/monitor-service";
+import { requireOperatorSession } from "@/lib/auth/guard";
+import { validateCsrfOrigin } from "@/lib/auth/csrf";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   try {
+    // 1. Enforce operator authentication
+    const auth = await requireOperatorSession();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
+
+    // 2. Enforce CSRF Origin validation
+    const csrfCheck = validateCsrfOrigin(request);
+    if (!csrfCheck.isValid) {
+      return NextResponse.json(
+        { success: false, error: "Cross-origin request rejected." },
+        { status: 403 }
+      );
+    }
+
     const { id } = await context.params;
     if (!id) {
       return NextResponse.json(

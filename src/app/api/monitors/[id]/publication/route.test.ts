@@ -1,15 +1,83 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PATCH } from "./route";
 import * as statusService from "@/lib/services/status-page-service";
+import * as guardModule from "@/lib/auth/guard";
 
 vi.mock("@/lib/services/status-page-service");
+vi.mock("@/lib/auth/guard");
 
 describe("PATCH /api/monitors/[id]/publication route handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: Authenticated operator session
+    vi.spyOn(guardModule, "requireOperatorSession").mockResolvedValue({
+      authenticated: true,
+      operator: { id: "test-op-1", username: "admin" },
+    });
   });
 
-  it("successfully publishes a monitor", async () => {
+  it("rejects unauthenticated requests with 401 without executing publication update", async () => {
+    vi.spyOn(guardModule, "requireOperatorSession").mockResolvedValueOnce({
+      authenticated: false,
+      response: new Response(
+        JSON.stringify({ success: false, error: "Unauthorized." }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      ) as any,
+    });
+    const toggleSpy = vi.spyOn(statusService, "toggleMonitorPublication");
+
+    const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ isPublic: true }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "mon-1" }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(toggleSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-origin requests with 403", async () => {
+    const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://malicious-site.example.com",
+      },
+      body: JSON.stringify({ isPublic: true }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "mon-1" }),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects non-JSON Content-Type with 415", async () => {
+    const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Origin: "http://localhost:3000",
+      },
+      body: "isPublic=true",
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "mon-1" }),
+    });
+
+    expect(response.status).toBe(415);
+  });
+
+  it("successfully publishes a monitor when authenticated", async () => {
     vi.spyOn(statusService, "toggleMonitorPublication").mockResolvedValueOnce({
       id: "mon-1",
       name: "API 1",
@@ -19,7 +87,10 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
 
     const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+      },
       body: JSON.stringify({ isPublic: true }),
     });
 
@@ -34,7 +105,7 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
     expect(json.data.publicId).toBe("pub_12345678901234567890123456789012");
   });
 
-  it("successfully unpublishes a monitor", async () => {
+  it("successfully unpublishes a monitor when authenticated", async () => {
     vi.spyOn(statusService, "toggleMonitorPublication").mockResolvedValueOnce({
       id: "mon-1",
       name: "API 1",
@@ -44,7 +115,10 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
 
     const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+      },
       body: JSON.stringify({ isPublic: false }),
     });
 
@@ -58,7 +132,7 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
     expect(json.data.isPublic).toBe(false);
   });
 
-  it("successfully regenerates publicId", async () => {
+  it("successfully regenerates publicId when authenticated", async () => {
     vi.spyOn(statusService, "regeneratePublicId").mockResolvedValueOnce({
       id: "mon-1",
       name: "API 1",
@@ -68,7 +142,10 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
 
     const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+      },
       body: JSON.stringify({ regenerate: true }),
     });
 
@@ -89,7 +166,10 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
 
     const request = new Request("http://localhost:3000/api/monitors/mon-missing/publication", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+      },
       body: JSON.stringify({ isPublic: true }),
     });
 
@@ -106,7 +186,10 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
   it("returns 400 when payload is invalid", async () => {
     const request = new Request("http://localhost:3000/api/monitors/mon-1/publication", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+      },
       body: JSON.stringify({ foo: "bar" }),
     });
 
@@ -120,4 +203,3 @@ describe("PATCH /api/monitors/[id]/publication route handler", () => {
     expect(json.error).toContain("Invalid request payload");
   });
 });
-

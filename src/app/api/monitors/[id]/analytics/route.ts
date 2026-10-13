@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMonitorAnalytics } from "@/lib/services/analytics-service";
 import { prisma } from "@/lib/prisma";
+import { requireOperatorSession } from "@/lib/auth/guard";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -8,6 +9,11 @@ interface RouteContext {
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
+    const auth = await requireOperatorSession();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
+
     const { id } = await context.params;
 
     const monitor = await prisma.monitor.findUnique({

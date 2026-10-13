@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { listIncidents } from "@/lib/services/incident-service";
+import { requireOperatorSession } from "@/lib/auth/guard";
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireOperatorSession();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
+
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get("status");
     const monitorId = searchParams.get("monitorId") || undefined;
