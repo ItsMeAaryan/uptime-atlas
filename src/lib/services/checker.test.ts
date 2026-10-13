@@ -96,3 +96,4 @@ describe("HTTP Check Service", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+

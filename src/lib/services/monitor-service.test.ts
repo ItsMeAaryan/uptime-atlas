@@ -128,3 +128,4 @@ describe("Monitor Service - DB Persistence", () => {
     expect(result.checkResult.status).toBe("UP");
   });
 });
+

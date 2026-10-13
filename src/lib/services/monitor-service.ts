@@ -144,3 +144,4 @@ export async function executeAndRecordCheck(monitorId: string) {
     checkResult,
   };
 }
+

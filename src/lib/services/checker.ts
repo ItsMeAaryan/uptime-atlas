@@ -112,3 +112,4 @@ export async function performHttpCheck(target: HttpCheckTarget): Promise<HttpChe
     clearTimeout(timeoutTimer);
   }
 }
+
