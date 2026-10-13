@@ -58,3 +58,4 @@ process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 
 // 4. Start worker
 worker.start();
+

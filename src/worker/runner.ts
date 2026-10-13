@@ -200,3 +200,4 @@ export class MonitoringWorker {
     return this.isRunning;
   }
 }
+

@@ -229,3 +229,4 @@ describe("MonitoringWorker Lifecycle", () => {
     expect(logMessages.some((m) => m.includes("Worker stopped cleanly"))).toBe(true);
   });
 });
+
