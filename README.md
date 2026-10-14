@@ -64,14 +64,31 @@ It provides real-time service health tracking, automated failure detection, samp
 
 ## Screenshots
 
-> [!NOTE]
-> Screenshots will be added in a future release. The visual representations below describe the user interfaces included in the application:
-
 * **Operator Dashboard (`/`)**: Displays active monitor cards, real-time status indicators, active outage banners, manual check triggers, and historical metrics.
 * **Operator Login (`/login`)**: Dark-themed credentials form with password visibility toggle, accessible error alerts, and rate-limiting notifications.
 * **Monitor Analytics Modal**: Rolling 24h, 7d, and 30d uptime percentages, response latency graphs, P95 values, and active incident details.
 * **Incident Timeline Modal**: Chronological timeline of outage detection, diagnostic notes, operator status updates, and manual resolution controls.
 * **Public Status Page (`/status/:publicId`)**: Clean, stakeholder-facing availability dashboard with live status indicators, a 90-day interactive calendar, and sanitized outage updates.
+
+### Operator Dashboard
+![Operator Dashboard](public/screenshots/dashboard.png)
+*Central operator overview displaying monitored endpoints, real-time health statuses, average response latency, and probe management controls.*
+
+### Monitor Analytics
+![Monitor Reliability Analytics](public/screenshots/monitor-analytics.png)
+*Historical reliability analytics modal showing availability percentages across rolling 24-hour, 7-day, and 30-day windows, P95 latency percentiles, and probe result breakdowns.*
+
+### Incident Timeline
+![Incident Tracking and Timeline](public/screenshots/incident-timeline.png)
+*Incident management view tracking automated outage detection, resolution states, and chronological event timelines.*
+
+### Public Status Page
+![Public Status Page](public/screenshots/public-status.png)
+*Stakeholder-facing public status page with a 90-day UTC availability calendar, rolling uptime metrics, and privacy-sanitized endpoint telemetry.*
+
+### Operator Authentication Gate
+![Operator Authentication Gate](public/screenshots/login.png)
+*Protected single-operator sign-in interface secured by sliding-window rate limiting and scrypt password verification.*
 
 ---
 
